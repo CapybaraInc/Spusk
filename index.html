@@ -377,33 +377,34 @@
             }
 
             // ===== ИГРА =====
-            // Экран (верхняя часть) — показывает символы
+            // Экран на всю стену (верхняя часть)
+            const screenHeight = 200;
             ctx.fillStyle = '#1a1a2a';
-            ctx.fillRect(0, 0, canvas.width, 80);
+            ctx.fillRect(0, 0, canvas.width, screenHeight);
             ctx.strokeStyle = '#ff00ff';
             ctx.lineWidth = 3;
-            ctx.strokeRect(10, 10, canvas.width-20, 60);
+            ctx.strokeRect(10, 10, canvas.width-20, screenHeight-20);
 
-            // Символ на экране
+            // Символ на экране (показывается, если не в режиме ввода)
             if (!inputLocked && !gameOver && !gameWin) {
                 const currentSymbol = sequence[playerIndex] || sequence[sequence.length-1];
                 ctx.fillStyle = currentSymbol.color;
                 ctx.shadowColor = currentSymbol.color;
                 ctx.shadowBlur = 30;
-                ctx.font = 'bold 40px "Segoe UI"';
+                ctx.font = 'bold 60px "Segoe UI"';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(currentSymbol.symbol, canvas.width/2, 45);
+                ctx.fillText(currentSymbol.symbol, canvas.width/2, screenHeight/2);
                 ctx.shadowBlur = 0;
             }
 
-            // Убийца сверху (следит за игроком)
-            drawKiller();
+            // Убийца (сверху, но не закрывает экран)
+            drawKiller(screenHeight);
 
-            // Человечек (спиной к камере)
-            drawCharacter();
+            // Человечек (спиной к камере, смотрит на экран)
+            drawCharacter(screenHeight);
 
-            // Кнопки перед игроком
+            // Кнопки перед игроком (не подсвечиваются)
             drawButtons();
 
             if (gameOver && !gameWin) {
@@ -423,28 +424,8 @@
             }
         }
 
-        function drawCharacter() {
-            const cx = canvas.width/2, baseY = 250;
-            ctx.save();
-            ctx.fillStyle = '#1e1e28';
-            ctx.shadowColor = '#000';
-            ctx.shadowBlur = 12;
-            // Тело (спиной к камере)
-            ctx.beginPath();
-            ctx.ellipse(cx, baseY-40, 16, 24, 0, 0, Math.PI*2);
-            ctx.fill();
-            // Голова
-            ctx.beginPath();
-            ctx.arc(cx, baseY-70, 13, 0, Math.PI*2);
-            ctx.fill();
-            // Ноги
-            ctx.fillRect(cx-9, baseY-10, 7, 22);
-            ctx.fillRect(cx+2, baseY-10, 7, 22);
-            ctx.restore();
-        }
-
-        function drawKiller() {
-            const topY = 20, bottomY = 180;
+        function drawKiller(screenHeight) {
+            const topY = 20, bottomY = screenHeight - 30;
             const cy = topY + killerY * (bottomY - topY);
             ctx.save();
             ctx.shadowColor = '#3a0000';
@@ -470,6 +451,26 @@
             ctx.restore();
         }
 
+        function drawCharacter(screenHeight) {
+            const cx = canvas.width/2, baseY = screenHeight + 50;
+            ctx.save();
+            ctx.fillStyle = '#1e1e28';
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 12;
+            // Тело (спиной к камере)
+            ctx.beginPath();
+            ctx.ellipse(cx, baseY-40, 16, 24, 0, 0, Math.PI*2);
+            ctx.fill();
+            // Голова
+            ctx.beginPath();
+            ctx.arc(cx, baseY-70, 13, 0, Math.PI*2);
+            ctx.fill();
+            // Ноги
+            ctx.fillRect(cx-9, baseY-10, 7, 22);
+            ctx.fillRect(cx+2, baseY-10, 7, 22);
+            ctx.restore();
+        }
+
         function drawButtons() {
             const total = BUTTONS.length;
             const btnWidth = 68, btnHeight = 68;
@@ -481,22 +482,14 @@
             for (let i = 0; i < total; i++) {
                 const x = startX + i * (btnWidth + 14);
                 const btn = BUTTONS[i];
-                const isFlashing = (flashButtonIndex === i);
-
+                // Без подсветки
                 ctx.save();
-                if (isFlashing) {
-                    ctx.shadowColor = btn.color;
-                    ctx.shadowBlur = 24;
-                } else {
-                    ctx.shadowBlur = 8;
-                    ctx.shadowColor = '#000';
-                }
-
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = '#000';
                 ctx.fillStyle = btn.color;
                 ctx.beginPath();
                 ctx.roundRect(x, btnY, btnWidth, btnHeight, 16);
                 ctx.fill();
-
                 ctx.fillStyle = '#ffffff';
                 ctx.font = 'bold 30px "Segoe UI"';
                 ctx.textAlign = 'center';

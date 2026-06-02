@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Спуск • Speedrun Edition</title>
+    <title>Спуск</title>
     <style>
         * {
             margin: 0;
@@ -142,7 +142,6 @@
 
         const TOTAL_ROUNDS = 15;
 
-        // Цвета и символы кнопок
         const BUTTONS = [
             { color: '#ff0000', symbol: '◆' },
             { color: '#0066ff', symbol: '●' },
@@ -157,22 +156,18 @@
         let gameWin = false;
         let inputLocked = true;
         let killerY = 0.0;
-        const KILLER_STEP = 0.12;
-        const KILLER_RISE = 0.1;
         let demoInterval = null;
         let flashButtonIndex = -1;
         let buttonBounds = [];
 
-        // Таймер
         let timerSeconds = 0;
         let timerInterval = null;
         let timerRunning = false;
-
-        // Счётчик ошибок
         let errorCount = 0;
 
-        // Состояние меню
         let inMenu = true;
+        let memorizing = false;
+        let waitingForInput = false;
 
         function resetGame() {
             if (demoInterval) {
@@ -197,9 +192,11 @@
             killerY = 0.0;
             inputLocked = true;
             flashButtonIndex = -1;
+            memorizing = false;
+            waitingForInput = false;
             updateUI();
             addNextElement();
-            playDemo();
+            startMemorization();
         }
 
         function startTimer() {
@@ -219,9 +216,10 @@
             sequence.push(randomBtn);
         }
 
-        function playDemo() {
+        function startMemorization() {
+            memorizing = true;
             inputLocked = true;
-            statusText.textContent = '👁️ Запомни';
+            waitingForInput = false;
             flashButtonIndex = -1;
             let step = 0;
             if (demoInterval) clearInterval(demoInterval);
@@ -241,26 +239,23 @@
                     clearInterval(demoInterval);
                     demoInterval = null;
                     flashButtonIndex = -1;
+                    memorizing = false;
+                    waitingForInput = true;
                     inputLocked = false;
                     playerIndex = 0;
-                    statusText.textContent = '⚡ Жми!';
+                    statusText.textContent = '⚡ Жми (по памяти)!';
                     draw();
                 }
             }, 650);
         }
 
         function handleInput(buttonObj) {
-            if (gameOver || gameWin || inputLocked) {
-                if (inputLocked && !gameOver) statusText.textContent = '⏳ Жди';
-                draw();
-                return;
-            }
+            if (gameOver || gameWin || waitingForInput === false) return;
             const expected = sequence[playerIndex];
             const correct = (buttonObj.color === expected.color && buttonObj.symbol === expected.symbol);
             if (correct) {
                 playerIndex++;
                 killerY = Math.max(0, killerY - KILLER_RISE);
-                statusText.textContent = '✓';
                 draw();
                 if (playerIndex >= sequence.length) {
                     if (round >= TOTAL_ROUNDS) {
@@ -272,21 +267,20 @@
                         updateUI();
                         statusText.textContent = 'Следующий!';
                         draw();
-                        setTimeout(() => { if (!gameOver && !gameWin) playDemo(); }, 500);
+                        setTimeout(() => { if (!gameOver && !gameWin) startMemorization(); }, 500);
                     }
                 }
             } else {
-                playerIndex = 0;
                 errorCount++;
                 errorsDisplay.textContent = errorCount;
                 killerY = Math.min(1, killerY + KILLER_STEP);
-                statusText.textContent = '❌ Ближе!';
                 draw();
                 if (killerY >= 1) {
                     finish(false);
                 } else {
+                    waitingForInput = false;
                     inputLocked = true;
-                    setTimeout(() => { if (!gameOver && !gameWin) playDemo(); }, 600);
+                    setTimeout(() => { if (!gameOver && !gameWin) startMemorization(); }, 600);
                 }
             }
             updateUI();
@@ -299,6 +293,8 @@
             gameOver = !isWin;
             gameWin = isWin;
             inputLocked = true;
+            waitingForInput = false;
+            memorizing = false;
             flashButtonIndex = -1;
             statusText.textContent = isWin ? '✨ Победа!' : '💀 Конец';
             killerY = isWin ? 0 : 1;
@@ -310,10 +306,8 @@
             roundDisplay.textContent = `${round}/${TOTAL_ROUNDS}`;
         }
 
-        // Отрисовка
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // Фон
             const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
             grad.addColorStop(0, '#10131c');
             grad.addColorStop(0.7, '#1b1e2a');
@@ -322,11 +316,8 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             if (inMenu) {
-                // ===== МЕНЮ =====
-                // Тёмная комната
                 ctx.fillStyle = '#0a0a0a';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                // Убийца сверху (смотрит в экран)
                 ctx.save();
                 ctx.shadowColor = '#3a0000';
                 ctx.shadowBlur = 16;
@@ -338,7 +329,6 @@
                 ctx.beginPath();
                 ctx.arc(canvas.width/2, 20, 24, 0, Math.PI*2);
                 ctx.fill();
-                // Глаза (смотрят вниз на игрока)
                 ctx.fillStyle = '#c42e2e';
                 ctx.shadowColor = '#ff0000';
                 ctx.shadowBlur = 10;
@@ -349,8 +339,6 @@
                 ctx.arc(canvas.width/2+8, 12, 4, 0, Math.PI);
                 ctx.fill();
                 ctx.restore();
-
-                // Текст меню
                 ctx.font = 'bold 32px "Segoe UI"';
                 ctx.fillStyle = '#cdd6f4';
                 ctx.shadowColor = '#000';
@@ -360,8 +348,6 @@
                 ctx.font = '16px "Segoe UI"';
                 ctx.fillStyle = '#888';
                 ctx.fillText('Кто выживет?', canvas.width/2, 190);
-
-                // Кнопка Start
                 const btnX = canvas.width/2 - 70, btnY = 260, btnW = 140, btnH = 50;
                 ctx.shadowColor = '#ff00ff';
                 ctx.shadowBlur = 20;
@@ -376,8 +362,6 @@
                 return;
             }
 
-            // ===== ИГРА =====
-            // Экран на всю стену (верхняя часть)
             const screenHeight = 200;
             ctx.fillStyle = '#1a1a2a';
             ctx.fillRect(0, 0, canvas.width, screenHeight);
@@ -385,8 +369,7 @@
             ctx.lineWidth = 3;
             ctx.strokeRect(10, 10, canvas.width-20, screenHeight-20);
 
-            // Символ на экране
-            if (!inputLocked && !gameOver && !gameWin) {
+            if (memorizing && !gameOver && !gameWin) {
                 const currentSymbol = sequence[playerIndex] || sequence[sequence.length-1];
                 ctx.fillStyle = currentSymbol.color;
                 ctx.shadowColor = currentSymbol.color;
@@ -396,15 +379,13 @@
                 ctx.textBaseline = 'middle';
                 ctx.fillText(currentSymbol.symbol, canvas.width/2, screenHeight/2);
                 ctx.shadowBlur = 0;
+            } else {
+                ctx.fillStyle = '#0a0a0a';
+                ctx.fillRect(10, 10, canvas.width-20, screenHeight-20);
             }
 
-            // Убийца (сверху, но не закрывает экран)
             drawKiller(screenHeight);
-
-            // Человечек (спиной к камере, смотрит на экран)
             drawCharacter(screenHeight);
-
-            // Кнопки перед игроком (не подсвечиваются)
             drawButtons();
 
             if (gameOver && !gameWin) {
@@ -438,7 +419,6 @@
             ctx.beginPath();
             ctx.arc(canvas.width/2, cy-20, 24, 0, Math.PI*2);
             ctx.fill();
-            // Глаза (смотрят на игрока)
             ctx.fillStyle = '#c42e2e';
             ctx.shadowColor = '#ff0000';
             ctx.shadowBlur = 10;
@@ -457,15 +437,12 @@
             ctx.fillStyle = '#1e1e28';
             ctx.shadowColor = '#000';
             ctx.shadowBlur = 12;
-            // Тело (спиной к камере)
             ctx.beginPath();
             ctx.ellipse(cx, baseY-40, 16, 24, 0, 0, Math.PI*2);
             ctx.fill();
-            // Голова
             ctx.beginPath();
             ctx.arc(cx, baseY-70, 13, 0, Math.PI*2);
             ctx.fill();
-            // Ноги
             ctx.fillRect(cx-9, baseY-10, 7, 22);
             ctx.fillRect(cx+2, baseY-10, 7, 22);
             ctx.restore();
@@ -482,7 +459,6 @@
             for (let i = 0; i < total; i++) {
                 const x = startX + i * (btnWidth + 14);
                 const btn = BUTTONS[i];
-                // Без подсветки
                 ctx.save();
                 ctx.shadowBlur = 8;
                 ctx.shadowColor = '#000';
@@ -503,7 +479,6 @@
             }
         }
 
-        // Поддержка roundRect
         if (!ctx.roundRect) {
             ctx.roundRect = function(x, y, w, h, r) {
                 if (typeof r === 'number') r = { tl: r, tr: r, br: r, bl: r };
@@ -521,7 +496,6 @@
             };
         }
 
-        // Обработка касаний
         function getTouchPos(e) {
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -538,7 +512,6 @@
             e.preventDefault();
             const pos = getTouchPos(e);
             if (inMenu) {
-                // Проверка клика по кнопке Start
                 const btnX = canvas.width/2 - 70, btnY = 260, btnW = 140, btnH = 50;
                 if (pos.x >= btnX && pos.x <= btnX + btnW && pos.y >= btnY && pos.y <= btnY + btnH) {
                     inMenu = false;
@@ -547,12 +520,7 @@
                 }
                 return;
             }
-            // Игрок может нажимать кнопки только когда экран погас
-            if (inputLocked) {
-                statusText.textContent = '⏳ Жди...';
-                draw();
-                return;
-            }
+            if (!waitingForInput) return;
             for (let b of buttonBounds) {
                 if (pos.x >= b.x && pos.x <= b.x + b.w && pos.y >= b.y && pos.y <= b.y + b.h) {
                     handleInput(b.btn);

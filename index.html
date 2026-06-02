@@ -142,17 +142,14 @@
 
         const TOTAL_ROUNDS = 15;
 
-        // Цвета и символы (будут добавляться постепенно)
-        const ALL_BUTTONS = [
-            { color: '#ff4d4d', symbol: '◆' },
-            { color: '#4da6ff', symbol: '●' },
+        // Цвета и символы кнопок
+        const BUTTONS = [
+            { color: '#ff0000', symbol: '◆' },
+            { color: '#0066ff', symbol: '●' },
             { color: '#ffcc00', symbol: '▲' },
-            { color: '#4de6a0', symbol: '⬟' },
-            { color: '#ff66b2', symbol: '★' },
-            { color: '#66ff66', symbol: '♦' }
+            { color: '#00cc66', symbol: '⬟' }
         ];
 
-        let activeButtons = [];
         let sequence = [];
         let playerIndex = 0;
         let round = 1;
@@ -200,8 +197,6 @@
             killerY = 0.0;
             inputLocked = true;
             flashButtonIndex = -1;
-            // Начинаем с 4 кнопок
-            activeButtons = ALL_BUTTONS.slice(0, 4);
             updateUI();
             addNextElement();
             playDemo();
@@ -220,12 +215,8 @@
         }
 
         function addNextElement() {
-            const randomBtn = activeButtons[Math.floor(Math.random() * activeButtons.length)];
+            const randomBtn = BUTTONS[Math.floor(Math.random() * BUTTONS.length)];
             sequence.push(randomBtn);
-            // Каждые 3 раунда добавляем новую кнопку
-            if (sequence.length % 3 === 0 && activeButtons.length < ALL_BUTTONS.length) {
-                activeButtons.push(ALL_BUTTONS[activeButtons.length]);
-            }
         }
 
         function playDemo() {
@@ -243,7 +234,7 @@
                     return;
                 }
                 if (step < sequence.length) {
-                    flashButtonIndex = activeButtons.indexOf(sequence[step]);
+                    flashButtonIndex = BUTTONS.indexOf(sequence[step]);
                     draw();
                     step++;
                 } else {
@@ -385,8 +376,34 @@
                 return;
             }
 
+            // ===== ИГРА =====
+            // Экран (верхняя часть) — показывает символы
+            ctx.fillStyle = '#1a1a2a';
+            ctx.fillRect(0, 0, canvas.width, 80);
+            ctx.strokeStyle = '#ff00ff';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(10, 10, canvas.width-20, 60);
+
+            // Символ на экране
+            if (!inputLocked && !gameOver && !gameWin) {
+                const currentSymbol = sequence[playerIndex] || sequence[sequence.length-1];
+                ctx.fillStyle = currentSymbol.color;
+                ctx.shadowColor = currentSymbol.color;
+                ctx.shadowBlur = 30;
+                ctx.font = 'bold 40px "Segoe UI"';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(currentSymbol.symbol, canvas.width/2, 45);
+                ctx.shadowBlur = 0;
+            }
+
+            // Убийца сверху (следит за игроком)
             drawKiller();
+
+            // Человечек (спиной к камере)
             drawCharacter();
+
+            // Кнопки перед игроком
             drawButtons();
 
             if (gameOver && !gameWin) {
@@ -394,85 +411,76 @@
                 ctx.fillStyle = '#ff3333';
                 ctx.shadowColor = '#ff0000';
                 ctx.shadowBlur = 20;
-                ctx.fillText('СХВАЧЕН', canvas.width/2-70, 55);
+                ctx.fillText('СХВАЧЕН', canvas.width/2, 80);
                 ctx.shadowBlur = 0;
             } else if (gameWin) {
                 ctx.font = 'bold 24px "Segoe UI"';
                 ctx.fillStyle = '#ffdd57';
                 ctx.shadowColor = '#ffaa00';
                 ctx.shadowBlur = 18;
-                ctx.fillText('ВЫЖИЛ', canvas.width/2-55, 55);
+                ctx.fillText('ВЫЖИЛ', canvas.width/2, 80);
                 ctx.shadowBlur = 0;
             }
         }
 
         function drawCharacter() {
-            const cx = canvas.width/2, baseY = 380;
+            const cx = canvas.width/2, baseY = 250;
             ctx.save();
             ctx.fillStyle = '#1e1e28';
             ctx.shadowColor = '#000';
             ctx.shadowBlur = 12;
+            // Тело (спиной к камере)
             ctx.beginPath();
-            ctx.ellipse(cx, baseY-22, 16, 24, 0, 0, Math.PI*2);
+            ctx.ellipse(cx, baseY-40, 16, 24, 0, 0, Math.PI*2);
             ctx.fill();
+            // Голова
             ctx.beginPath();
-            ctx.arc(cx, baseY-52, 13, 0, Math.PI*2);
+            ctx.arc(cx, baseY-70, 13, 0, Math.PI*2);
             ctx.fill();
-            ctx.fillStyle = '#0f0f18';
-            ctx.beginPath();
-            ctx.arc(cx, baseY-59, 15, Math.PI, 0);
-            ctx.fill();
-            ctx.fillStyle = '#1a1a24';
-            ctx.fillRect(cx-9, baseY, 7, 22);
-            ctx.fillRect(cx+2, baseY, 7, 22);
+            // Ноги
+            ctx.fillRect(cx-9, baseY-10, 7, 22);
+            ctx.fillRect(cx+2, baseY-10, 7, 22);
             ctx.restore();
         }
 
         function drawKiller() {
-            const topY = 20, bottomY = 280;
+            const topY = 20, bottomY = 180;
             const cy = topY + killerY * (bottomY - topY);
-            ctx.beginPath();
-            ctx.strokeStyle = '#5c4a3a';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([4, 4]);
-            ctx.moveTo(canvas.width/2, 5);
-            ctx.lineTo(canvas.width/2, cy-10);
-            ctx.stroke();
-            ctx.setLineDash([]);
             ctx.save();
             ctx.shadowColor = '#3a0000';
             ctx.shadowBlur = 16;
             ctx.fillStyle = '#1c0f0f';
             ctx.beginPath();
-            ctx.ellipse(canvas.width/2, cy-3, 14, 20, 0, 0, Math.PI*2);
+            ctx.ellipse(canvas.width/2, cy, 28, 40, 0, 0, Math.PI*2);
             ctx.fill();
             ctx.fillStyle = '#140a0a';
             ctx.beginPath();
-            ctx.arc(canvas.width/2, cy-28, 12, 0, Math.PI*2);
+            ctx.arc(canvas.width/2, cy-20, 24, 0, Math.PI*2);
             ctx.fill();
+            // Глаза (смотрят на игрока)
             ctx.fillStyle = '#c42e2e';
             ctx.shadowColor = '#ff0000';
             ctx.shadowBlur = 10;
             ctx.beginPath();
-            ctx.arc(canvas.width/2-5, cy-31, 2.5, 0, Math.PI);
+            ctx.arc(canvas.width/2-8, cy-28, 4, 0, Math.PI);
             ctx.fill();
             ctx.beginPath();
-            ctx.arc(canvas.width/2+5, cy-31, 2.5, 0, Math.PI);
+            ctx.arc(canvas.width/2+8, cy-28, 4, 0, Math.PI);
             ctx.fill();
             ctx.restore();
         }
 
         function drawButtons() {
-            const total = activeButtons.length;
+            const total = BUTTONS.length;
             const btnWidth = 68, btnHeight = 68;
             const totalWidth = total * btnWidth + (total-1) * 14;
             const startX = (canvas.width - totalWidth) / 2;
-            const btnY = 400;
+            const btnY = 330;
             buttonBounds = [];
 
             for (let i = 0; i < total; i++) {
                 const x = startX + i * (btnWidth + 14);
-                const btn = activeButtons[i];
+                const btn = BUTTONS[i];
                 const isFlashing = (flashButtonIndex === i);
 
                 ctx.save();

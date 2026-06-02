@@ -142,14 +142,17 @@
 
         const TOTAL_ROUNDS = 15;
 
-        // Цвета и символы (яркие, контрастные для телефона)
-        const BUTTONS = [
+        // Цвета и символы (будут добавляться постепенно)
+        const ALL_BUTTONS = [
             { color: '#ff4d4d', symbol: '◆' },
             { color: '#4da6ff', symbol: '●' },
             { color: '#ffcc00', symbol: '▲' },
-            { color: '#4de6a0', symbol: '⬟' }
+            { color: '#4de6a0', symbol: '⬟' },
+            { color: '#ff66b2', symbol: '★' },
+            { color: '#66ff66', symbol: '♦' }
         ];
 
+        let activeButtons = [];
         let sequence = [];
         let playerIndex = 0;
         let round = 1;
@@ -197,6 +200,8 @@
             killerY = 0.0;
             inputLocked = true;
             flashButtonIndex = -1;
+            // Начинаем с 4 кнопок
+            activeButtons = ALL_BUTTONS.slice(0, 4);
             updateUI();
             addNextElement();
             playDemo();
@@ -215,8 +220,12 @@
         }
 
         function addNextElement() {
-            const randomBtn = BUTTONS[Math.floor(Math.random() * BUTTONS.length)];
+            const randomBtn = activeButtons[Math.floor(Math.random() * activeButtons.length)];
             sequence.push(randomBtn);
+            // Каждые 3 раунда добавляем новую кнопку
+            if (sequence.length % 3 === 0 && activeButtons.length < ALL_BUTTONS.length) {
+                activeButtons.push(ALL_BUTTONS[activeButtons.length]);
+            }
         }
 
         function playDemo() {
@@ -234,7 +243,7 @@
                     return;
                 }
                 if (step < sequence.length) {
-                    flashButtonIndex = BUTTONS.indexOf(sequence[step]);
+                    flashButtonIndex = activeButtons.indexOf(sequence[step]);
                     draw();
                     step++;
                 } else {
@@ -361,7 +370,7 @@
                 ctx.fillStyle = '#888';
                 ctx.fillText('Кто выживет?', canvas.width/2, 190);
 
-                // Кнопка Start (стилизована под игру)
+                // Кнопка Start
                 const btnX = canvas.width/2 - 70, btnY = 260, btnW = 140, btnH = 50;
                 ctx.shadowColor = '#ff00ff';
                 ctx.shadowBlur = 20;
@@ -373,9 +382,6 @@
                 ctx.font = 'bold 18px "Segoe UI"';
                 ctx.shadowBlur = 0;
                 ctx.fillText('▶  START', canvas.width/2, btnY+32);
-
-                // При клике — переход в игру
-                // (обработчик клика будет внизу)
                 return;
             }
 
@@ -457,7 +463,7 @@
         }
 
         function drawButtons() {
-            const total = BUTTONS.length;
+            const total = activeButtons.length;
             const btnWidth = 68, btnHeight = 68;
             const totalWidth = total * btnWidth + (total-1) * 14;
             const startX = (canvas.width - totalWidth) / 2;
@@ -466,7 +472,7 @@
 
             for (let i = 0; i < total; i++) {
                 const x = startX + i * (btnWidth + 14);
-                const btn = BUTTONS[i];
+                const btn = activeButtons[i];
                 const isFlashing = (flashButtonIndex === i);
 
                 ctx.save();

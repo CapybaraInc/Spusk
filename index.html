@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Спуск • Speedrun Edition</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        body {
+            background: #05060a;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+        .game-container {
+            background: radial-gradient(ellipse at 50% 25%, #1a1e2b, #0a0c14);
+            border-radius: 2rem;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.9), inset 0 0 60px rgba(0,0,0,0.7);
+            padding: 0.8rem 0.8rem 1.2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 420px;
+            width: 100%;
+            height: 100vh;
+            max-height: 750px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-height: 65vh;
+            border-radius: 1.5rem;
+            background: #0d1117;
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 10px 20px black;
+            touch-action: manipulation;
+        }
+        .ui-panel {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.6rem;
+            color: #cdd6f4;
+            font-weight: bold;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding: 0 0.3rem;
+        }
+        .round-box {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(8px);
+            padding: 0.4rem 1rem;
+            border-radius: 3rem;
+            font-size: 1rem;
+            letter-spacing: 0.5px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .timer-box {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(8px);
+            padding: 0.4rem 1rem;
+            border-radius: 3rem;
+            font-size: 1rem;
+            letter-spacing: 0.5px;
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #ffcc00;
+        }
+        .errors-box {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(8px);
+            padding: 0.4rem 1rem;
+            border-radius: 3rem;
+            font-size: 1rem;
+            letter-spacing: 0.5px;
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #ff6666;
+        }
+        .message {
+            font-size: 0.9rem;
+            color: #f5c542;
+            text-shadow: 0 0 10px #ffb300;
+            text-align: center;
+            flex: 1;
+        }
+        button {
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.25);
+            color: white;
+            font-weight: bold;
+            padding: 0.5rem 1.2rem;
+            border-radius: 2.5rem;
+            font-size: 0.9rem;
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        button:active {
+            background: rgba(255,255,255,0.25);
+            border-color: #ffb86c;
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <canvas id="gameCanvas" width="400" height="450" aria-label="Игровое поле"></canvas>
+    <div class="ui-panel">
+        <span class="round-box" id="roundDisplay">1/15</span>
+        <span class="timer-box" id="timerDisplay">00:00</span>
+        <span class="errors-box" id="errorsDisplay">0</span>
+        <span class="message" id="statusText">👁️ Смотри</span>
+        <button id="resetButton">↺</button>
+    </div>
+</div>
+
+<script>
+    (function() {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const roundDisplay = document.getElementById('roundDisplay');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const errorsDisplay = document.getElementById('errorsDisplay');
+        const statusText = document.getElementById('statusText');
+        const resetBtn = document.getElementById('resetButton');
+
+        const TOTAL_ROUNDS = 15;
+
+        // Цвета и символы (яркие, контрастные для телефона)
+        const BUTTONS = [
+            { color: '#ff4d4d', symbol: '◆' },
+            { color: '#4da6ff', symbol: '●' },
+            { color: '#ffcc00', symbol: '▲' },
+            { color: '#4de6a0', symbol: '⬟' }
+        ];
+
+        let sequence = [];
+        let playerIndex = 0;
+        let round = 1;
+        let gameOver = false;
+        let gameWin = false;
+        let inputLocked = true;
+        let killerY = 0.0;
+        const KILLER_STEP = 0.12;
+        const KILLER_RISE = 0.1;
+        let demoInterval = null;
+        let flashButtonIndex = -1;
+        let buttonBounds = [];
+
+        // Таймер
+        let timerSeconds = 0;
+        let timerInterval = null;
+        let timerRunning = false;
+
+        // Счётчик ошибок
+        let errorCount = 0;
+
+        // Состояние меню
+        let inMenu = true;
+
+        function resetGame() {
+            if (demoInterval) {
+                clearInterval(demoInterval);
+                demoInterval = null;
+            }
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            timerRunning = false;
+            timerSeconds = 0;
+            timerDisplay.textContent = '00:00';
+            errorCount = 0;
+            errorsDisplay.textContent = '0';
+
+            sequence = [];
+            playerIndex = 0;
+            round = 1;
+            gameOver = false;
+            gameWin = false;
+            killerY = 0.0;
+            inputLocked = true;
+            flashButtonIndex = -1;
+            updateUI();
+            addNextElement();
+            playDemo();
+        }
+
+        function startTimer() {
+            if (!timerRunning) {
+                timerRunning = true;
+                timerInterval = setInterval(() => {
+                    timerSeconds++;
+                    const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+                    const s = String(timerSeconds % 60).padStart(2, '0');
+                    timerDisplay.textContent = `${m}:${s}`;
+                }, 1000);
+            }
+        }
+
+        function addNextElement() {
+            const randomBtn = BUTTONS[Math.floor(Math.random() * BUTTONS.length)];
+            sequence.push(randomBtn);
+        }
+
+        function playDemo() {
+            inputLocked = true;
+            statusText.textContent = '👁️ Запомни';
+            flashButtonIndex = -1;
+            let step = 0;
+            if (demoInterval) clearInterval(demoInterval);
+            demoInterval = setInterval(() => {
+                if (gameOver || gameWin) {
+                    clearInterval(demoInterval);
+                    demoInterval = null;
+                    flashButtonIndex = -1;
+                    draw();
+                    return;
+                }
+                if (step < sequence.length) {
+                    flashButtonIndex = BUTTONS.indexOf(sequence[step]);
+                    draw();
+                    step++;
+                } else {
+                    clearInterval(demoInterval);
+                    demoInterval = null;
+                    flashButtonIndex = -1;
+                    inputLocked = false;
+                    playerIndex = 0;
+                    statusText.textContent = '⚡ Жми!';
+                    draw();
+                }
+            }, 650);
+        }
+
+        function handleInput(buttonObj) {
+            if (gameOver || gameWin || inputLocked) {
+                if (inputLocked && !gameOver) statusText.textContent = '⏳ Жди';
+                draw();
+                return;
+            }
+            const expected = sequence[playerIndex];
+            const correct = (buttonObj.color === expected.color && buttonObj.symbol === expected.symbol);
+            if (correct) {
+                playerIndex++;
+                killerY = Math.max(0, killerY - KILLER_RISE);
+                statusText.textContent = '✓';
+                draw();
+                if (playerIndex >= sequence.length) {
+                    if (round >= TOTAL_ROUNDS) {
+                        finish(true);
+                    } else {
+                        round++;
+                        killerY = Math.max(0, killerY - 0.05);
+                        addNextElement();
+                        updateUI();
+                        statusText.textContent = 'Следующий!';
+                        draw();
+                        setTimeout(() => { if (!gameOver && !gameWin) playDemo(); }, 500);
+                    }
+                }
+            } else {
+                playerIndex = 0;
+                errorCount++;
+                errorsDisplay.textContent = errorCount;
+                killerY = Math.min(1, killerY + KILLER_STEP);
+                statusText.textContent = '❌ Ближе!';
+                draw();
+                if (killerY >= 1) {
+                    finish(false);
+                } else {
+                    inputLocked = true;
+                    setTimeout(() => { if (!gameOver && !gameWin) playDemo(); }, 600);
+                }
+            }
+            updateUI();
+        }
+
+        function finish(isWin) {
+            if (demoInterval) { clearInterval(demoInterval); demoInterval = null; }
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+            timerRunning = false;
+            gameOver = !isWin;
+            gameWin = isWin;
+            inputLocked = true;
+            flashButtonIndex = -1;
+            statusText.textContent = isWin ? '✨ Победа!' : '💀 Конец';
+            killerY = isWin ? 0 : 1;
+            draw();
+            updateUI();
+        }
+
+        function updateUI() {
+            roundDisplay.textContent = `${round}/${TOTAL_ROUNDS}`;
+        }
+
+        // Отрисовка
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Фон
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#10131c');
+            grad.addColorStop(0.7, '#1b1e2a');
+            grad.addColorStop(1, '#0a0c0f');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (inMenu) {
+                // ===== МЕНЮ =====
+                // Тёмная комната
+                ctx.fillStyle = '#0a0a0a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                // Убийца сверху (смотрит в экран)
+                ctx.save();
+                ctx.shadowColor = '#3a0000';
+                ctx.shadowBlur = 16;
+                ctx.fillStyle = '#1c0f0f';
+                ctx.beginPath();
+                ctx.ellipse(canvas.width/2, 60, 28, 40, 0, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = '#140a0a';
+                ctx.beginPath();
+                ctx.arc(canvas.width/2, 20, 24, 0, Math.PI*2);
+                ctx.fill();
+                // Глаза (смотрят вниз на игрока)
+                ctx.fillStyle = '#c42e2e';
+                ctx.shadowColor = '#ff0000';
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(canvas.width/2-8, 12, 4, 0, Math.PI);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(canvas.width/2+8, 12, 4, 0, Math.PI);
+                ctx.fill();
+                ctx.restore();
+
+                // Текст меню
+                ctx.font = 'bold 32px "Segoe UI"';
+                ctx.fillStyle = '#cdd6f4';
+                ctx.shadowColor = '#000';
+                ctx.shadowBlur = 12;
+                ctx.textAlign = 'center';
+                ctx.fillText('СПУСК', canvas.width/2, 150);
+                ctx.font = '16px "Segoe UI"';
+                ctx.fillStyle = '#888';
+                ctx.fillText('Кто выживет?', canvas.width/2, 190);
+
+                // Кнопка Start (стилизована под игру)
+                const btnX = canvas.width/2 - 70, btnY = 260, btnW = 140, btnH = 50;
+                ctx.shadowColor = '#ff00ff';
+                ctx.shadowBlur = 20;
+                ctx.fillStyle = '#2a1a2a';
+                ctx.beginPath();
+                ctx.roundRect(btnX, btnY, btnW, btnH, 12);
+                ctx.fill();
+                ctx.fillStyle = '#ff00ff';
+                ctx.font = 'bold 18px "Segoe UI"';
+                ctx.shadowBlur = 0;
+                ctx.fillText('▶  START', canvas.width/2, btnY+32);
+
+                // При клике — переход в игру
+                // (обработчик клика будет внизу)
+                return;
+            }
+
+            drawKiller();
+            drawCharacter();
+            drawButtons();
+
+            if (gameOver && !gameWin) {
+                ctx.font = 'bold 24px "Segoe UI"';
+                ctx.fillStyle = '#ff3333';
+                ctx.shadowColor = '#ff0000';
+                ctx.shadowBlur = 20;
+                ctx.fillText('СХВАЧЕН', canvas.width/2-70, 55);
+                ctx.shadowBlur = 0;
+            } else if (gameWin) {
+                ctx.font = 'bold 24px "Segoe UI"';
+                ctx.fillStyle = '#ffdd57';
+                ctx.shadowColor = '#ffaa00';
+                ctx.shadowBlur = 18;
+                ctx.fillText('ВЫЖИЛ', canvas.width/2-55, 55);
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        function drawCharacter() {
+            const cx = canvas.width/2, baseY = 380;
+            ctx.save();
+            ctx.fillStyle = '#1e1e28';
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.ellipse(cx, baseY-22, 16, 24, 0, 0, Math.PI*2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(cx, baseY-52, 13, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#0f0f18';
+            ctx.beginPath();
+            ctx.arc(cx, baseY-59, 15, Math.PI, 0);
+            ctx.fill();
+            ctx.fillStyle = '#1a1a24';
+            ctx.fillRect(cx-9, baseY, 7, 22);
+            ctx.fillRect(cx+2, baseY, 7, 22);
+            ctx.restore();
+        }
+
+        function drawKiller() {
+            const topY = 20, bottomY = 280;
+            const cy = topY + killerY * (bottomY - topY);
+            ctx.beginPath();
+            ctx.strokeStyle = '#5c4a3a';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.moveTo(canvas.width/2, 5);
+            ctx.lineTo(canvas.width/2, cy-10);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.save();
+            ctx.shadowColor = '#3a0000';
+            ctx.shadowBlur = 16;
+            ctx.fillStyle = '#1c0f0f';
+            ctx.beginPath();
+            ctx.ellipse(canvas.width/2, cy-3, 14, 20, 0, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#140a0a';
+            ctx.beginPath();
+            ctx.arc(canvas.width/2, cy-28, 12, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#c42e2e';
+            ctx.shadowColor = '#ff0000';
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(canvas.width/2-5, cy-31, 2.5, 0, Math.PI);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(canvas.width/2+5, cy-31, 2.5, 0, Math.PI);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawButtons() {
+            const total = BUTTONS.length;
+            const btnWidth = 68, btnHeight = 68;
+            const totalWidth = total * btnWidth + (total-1) * 14;
+            const startX = (canvas.width - totalWidth) / 2;
+            const btnY = 400;
+            buttonBounds = [];
+
+            for (let i = 0; i < total; i++) {
+                const x = startX + i * (btnWidth + 14);
+                const btn = BUTTONS[i];
+                const isFlashing = (flashButtonIndex === i);
+
+                ctx.save();
+                if (isFlashing) {
+                    ctx.shadowColor = btn.color;
+                    ctx.shadowBlur = 24;
+                } else {
+                    ctx.shadowBlur = 8;
+                    ctx.shadowColor = '#000';
+                }
+
+                ctx.fillStyle = btn.color;
+                ctx.beginPath();
+                ctx.roundRect(x, btnY, btnWidth, btnHeight, 16);
+                ctx.fill();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 30px "Segoe UI"';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.shadowColor = 'rgba(0,0,0,0.6)';
+                ctx.shadowBlur = 6;
+                ctx.fillText(btn.symbol, x + btnWidth/2, btnY + btnHeight/2);
+                ctx.restore();
+
+                buttonBounds.push({ x, y: btnY, w: btnWidth, h: btnHeight, btn, index: i });
+            }
+        }
+
+        // Поддержка roundRect
+        if (!ctx.roundRect) {
+            ctx.roundRect = function(x, y, w, h, r) {
+                if (typeof r === 'number') r = { tl: r, tr: r, br: r, bl: r };
+                ctx.beginPath();
+                ctx.moveTo(x + r.tl, y);
+                ctx.lineTo(x + w - r.tr, y);
+                ctx.quadraticCurveTo(x + w, y, x + w, y + r.tr);
+                ctx.lineTo(x + w, y + h - r.br);
+                ctx.quadraticCurveTo(x + w, y + h, x + w - r.br, y + h);
+                ctx.lineTo(x + r.bl, y + h);
+                ctx.quadraticCurveTo(x, y + h, x, y + h - r.bl);
+                ctx.lineTo(x, y + r.tl);
+                ctx.quadraticCurveTo(x, y, x + r.tl, y);
+                ctx.closePath();
+            };
+        }
+
+        // Обработка касаний
+        function getTouchPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+
+        function onDown(e) {
+            e.preventDefault();
+            const pos = getTouchPos(e);
+            if (inMenu) {
+                // Проверка клика по кнопке Start
+                const btnX = canvas.width/2 - 70, btnY = 260, btnW = 140, btnH = 50;
+                if (pos.x >= btnX && pos.x <= btnX + btnW && pos.y >= btnY && pos.y <= btnY + btnH) {
+                    inMenu = false;
+                    resetGame();
+                    return;
+                }
+                return;
+            }
+            for (let b of buttonBounds) {
+                if (pos.x >= b.x && pos.x <= b.x + b.w && pos.y >= b.y && pos.y <= b.y + b.h) {
+                    handleInput(b.btn);
+                    break;
+                }
+            }
+        }
+
+        canvas.addEventListener('touchstart', onDown, { passive: false });
+        canvas.addEventListener('mousedown', onDown);
+        resetBtn.addEventListener('click', resetGame);
+        resetBtn.addEventListener('touchend', (e) => { e.preventDefault(); resetGame(); });
+
+        inMenu = true;
+        draw();
+    })();
+</script>
+</body>
+</html>

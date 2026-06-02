@@ -385,7 +385,7 @@
             ctx.lineWidth = 3;
             ctx.strokeRect(10, 10, canvas.width-20, screenHeight-20);
 
-            // Символ на экране (показывается, если не в режиме ввода)
+            // Символ на экране
             if (!inputLocked && !gameOver && !gameWin) {
                 const currentSymbol = sequence[playerIndex] || sequence[sequence.length-1];
                 ctx.fillStyle = currentSymbol.color;
@@ -545,6 +545,12 @@
                     resetGame();
                     return;
                 }
+                return;
+            }
+            // Игрок может нажимать кнопки только когда экран погас
+            if (inputLocked) {
+                statusText.textContent = '⏳ Жди...';
+                draw();
                 return;
             }
             for (let b of buttonBounds) {
